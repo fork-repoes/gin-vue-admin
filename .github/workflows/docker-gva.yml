@@ -1,0 +1,51 @@
+name: Build Image Go-Tool-Encrypt
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['ubuntu-latest']
+        go: ['1.20.x']
+    runs-on: ${{ matrix.os }}
+    env:
+      PROJECT_PREFIX: server
+      IMAGE_PREFIX: gva-server
+    steps:
+      - name: Export Global Var
+        run: |
+          echo "PROJECT_HOME=$PWD" >> $GITHUB_ENV
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Export Global Var
+        # define global var, then put to GITHUB_ENV
+        run: |
+          echo "ALI_DOCKER_REGISTRY=${{ secrets.ALI_DOCKER_HUB_REGISTRY }}" >> $GITHUB_ENV
+          echo "ALI_DOCKER_USERNAME=${{ secrets.ALI_DOCKER_REGISTRY_USERNAME }}" >> $GITHUB_ENV
+          echo "ALI_DOCKER_PASSWORD=${{ secrets.ALI_DOCKER_REGISTRY_PASSWORD }}" >> $GITHUB_ENV
+          echo "PROJECT_HOME=$PWD" >> $GITHUB_ENV
+          echo "TAG=`echo \`date +%Y%m%d\`.${GITHUB_SHA} | cut -c1-16`" >> $GITHUB_ENV
+
+      - uses: WillAbides/setup-go-faster@v1.13.0
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Build tool-encrypt
+        run: |
+          cd $PROJECT_HOME/$PROJECT_PREFIX
+          go build -o main.zip
+
+      - name: Push Image
+        run: |
+          cd $PROJECT_HOME/$PROJECT_PREFIX
+          image=$IMAGE_PREFIX-go${{ matrix.go }}:${TAG}
+          docker build -f Dockerfile -t ${image} .
+          docker login --username=$ALI_DOCKER_USERNAME --password=$ALI_DOCKER_PASSWORD $ALI_DOCKER_REGISTRY
+          docker tag $image $ALI_DOCKER_REGISTRY/alice52/$image
+          docker push $ALI_DOCKER_REGISTRY/alice52/$image
+          echo "image:" ${image}
