@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"mime/multipart"
+	"path"
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
@@ -38,17 +39,26 @@ func (*AwsS3) UploadFile(file *multipart.FileHeader) (string, string, error) {
 	}
 	defer f.Close() // 创建文件 defer 关闭
 
-	_, err := uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(global.GVA_CONFIG.AwsS3.Bucket),
-		Key:    aws.String(filename),
-		Body:   f,
+	// 读取文件前 512 个字节用于判断文件类型
+	fileType, err := DetermineByFile(f)
+	if err != nil {
+		global.GVA_LOG.Error("judge file conent type failed", zap.Error(err))
+		return "", "", errors.New("judge file conent type failed: " + err.Error())
+	}
+
+	_, err = uploader.Upload(&s3manager.UploadInput{
+		Bucket:      aws.String(global.GVA_CONFIG.AwsS3.Bucket),
+		Key:         aws.String(filename),
+		Body:        f,
+		ContentType: &fileType,
 	})
 	if err != nil {
 		global.GVA_LOG.Error("function uploader.Upload() failed", zap.Any("err", err.Error()))
 		return "", "", err
 	}
 
-	return global.GVA_CONFIG.AwsS3.BaseURL + "/" + filename, fileKey, nil
+	fp := path.Join(global.GVA_CONFIG.AwsS3.BaseURL, global.GVA_CONFIG.AwsS3.Bucket, filename)
+	return fp, fileKey, nil
 }
 
 //@author: [WqyJh](https://github.com/WqyJh)
